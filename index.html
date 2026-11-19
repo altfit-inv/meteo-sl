@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Chuva por bairro — Santa Luzia & Lagoa Santa</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--ink:#1d2430;--mute:#6b7585;--line:#e3e7ee;--acc:#1f5fbf}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--ink);font-size:14px}
+header{padding:14px 16px;background:#fff;border-bottom:1px solid var(--line);display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
+h1{font-size:17px;margin:0}
+h2{font-size:15px;margin:0 0 10px}
+.sub{color:var(--mute);font-size:12px}
+main{max-width:1200px;margin:0 auto;padding:14px;display:grid;gap:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+button,select{font:inherit;padding:6px 10px;border:1px solid var(--line);border-radius:7px;background:#fff;cursor:pointer}
+button.pri{background:var(--acc);color:#fff;border-color:var(--acc)}
+.chip{font-size:11px;padding:2px 7px;border-radius:20px;border:1px solid var(--line);color:var(--mute)}
+.chip.ok{border-color:#9bd3ad;color:#1d7a3e;background:#effaf2}
+.chip.err{border-color:#f0b2b2;color:#a12a2a;background:#fdf1f1}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%}
+th,td{padding:5px 6px;text-align:center;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font-size:11px;color:var(--mute);font-weight:600}
+td.l,th.l{text-align:left}
+.heat td.c{min-width:34px;font-size:11px;font-variant-numeric:tabular-nums;border:1px solid #fff;cursor:pointer}
+.heat tr.sel td.l{font-weight:700;color:var(--acc)}
+.heat td.l{cursor:pointer;position:sticky;left:0;background:#fff}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px}
+.bc{border:1px solid var(--line);border-radius:9px;padding:10px;cursor:pointer}
+.bc.sel{border-color:var(--acc);box-shadow:0 0 0 2px #1f5fbf22}
+.bc .n{font-weight:700}.bc .big{font-size:22px;font-weight:700}
+#map{height:340px;border-radius:8px}
+.legend{display:flex;gap:4px;align-items:center;font-size:11px;color:var(--mute)}
+.legend span{display:inline-block;width:22px;height:12px;border-radius:2px}
+.note{font-size:12px;color:var(--mute);line-height:1.45}
+.mk{background:#fff;border:2px solid var(--acc);border-radius:14px;padding:1px 6px;font-size:11px;font-weight:700;white-space:nowrap;box-shadow:0 1px 3px #0003}
+.grid2{display:grid;grid-template-columns:1fr;gap:14px}
+@media(min-width:900px){.grid2{grid-template-columns:1.2fr 1fr}}
+canvas{max-height:300px}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Chuva por bairro — Santa Luzia &amp; Lagoa Santa</h1>
+    <div class="sub" id="upd">Carregando modelos…</div>
+  </div>
+  <div class="row">
+    <label class="sub">Limiar chuva/h
+      <select id="thr"><option value="0.2">0,2 mm</option><option value="0.5" selected>0,5 mm</option><option value="1">1 mm</option><option value="5">5 mm (forte)</option></select>
+    </label>
+    <button class="pri" id="btnR">Atualizar</button>
+  </div>
+</header>
+
+<main>
+  <section class="card">
+    <div class="row" style="justify-content:space-between">
+      <h2 id="bolT">Boletim</h2>
+      <button id="btnCopy">Copiar para WhatsApp</button>
+    </div>
+    <div id="bol" style="white-space:pre-wrap;font-size:15px;line-height:1.55"></div>
+    <div class="note" id="bolN" style="margin-top:8px">Texto gerado automaticamente a partir dos ensembles (chance ≥ 60% = "chuva"; 35–60% = "possibilidade de chuva"). Toque em outro bairro para trocar o boletim.</div>
+  </section>
+
+  <section class="card">
+    <h2>Resumo por bairro</h2>
+    <div class="cards" id="cards"></div>
+  </section>
+
+  <section class="card">
+    <div class="row" style="justify-content:space-between">
+      <h2>Próximas 24h — probabilidade de chuva (ensembles) por hora</h2>
+      <div class="legend" id="leg"></div>
+    </div>
+    <div class="scroll"><table class="heat" id="heat"></table></div>
+    <div class="note">Cor = % de membros dos ensembles (ECMWF, GFS, ICON, GEM) com chuva ≥ limiar naquela hora. Número = mediana dos modelos determinísticos em mm. Toque num bairro para ver o detalhe.</div>
+  </section>
+
+  <div class="grid2">
+    <section class="card">
+      <h2 id="detT">Detalhe</h2>
+      <canvas id="chart"></canvas>
+      <div class="note">Barras: mediana dos modelos (mm/h). Linhas finas: cada modelo. Linha tracejada: probabilidade dos ensembles (eixo direito).</div>
+    </section>
+    <section class="card">
+      <h2>Mapa + radar</h2>
+      <div id="map"></div>
+      <div class="note" id="radarSt">Arraste um marcador para ajustar a posição do bairro (fica salvo neste navegador).</div>
+    </section>
+  </div>
+
+  <section class="card">
+    <h2 id="d7T">Próximos 7 dias</h2>
+    <div class="scroll"><table id="d7"></table></div>
+    <div class="note">Chuva/dia = mediana da soma diária dos modelos (faixa mín–máx entre modelos). Prob. = % de membros dos ensembles com ≥ 1 mm no dia.</div>
+  </section>
+
+  <section class="card">
+    <h2>Divergência entre modelos — total nas próximas 24h (mm)</h2>
+    <div class="scroll"><table id="mt"></table></div>
+    <div class="row" id="st" style="margin-top:10px"></div>
+  </section>
+
+  <section class="card note">
+    <b>Como ler.</b> Os modelos globais têm grade de ~9 a 25 km, então bairros a poucos km de distância costumam receber valores parecidos. O ganho real está em (1) ver quando os modelos concordam ou divergem, (2) a probabilidade dos ensembles e (3) o radar para as próximas 1–2 h. Em dias de pancadas isoladas, confie mais no radar.<br>
+    Dados: <a href="https://open-meteo.com" target="_blank">Open-Meteo</a> (CC BY 4.0, uso não comercial gratuito) · Radar: <a href="https://www.rainviewer.com" target="_blank">RainViewer</a> · Mapa © OpenStreetMap, © CARTO.
+    Alternativas visuais: <a href="https://www.windy.com/-19.70/-43.88?radar,-19.70,-43.88,11" target="_blank">Windy radar</a>.
+    <br><button id="btnReset" style="margin-top:8px">Restaurar posições originais dos bairros</button>
+  </section>
+</main>
+
+<script>
+const DEFAULT_PTS=[
+ {id:'nova-esperanca',nome:'Nova Esperança (Pantanal)',cidade:'Santa Luzia',lat:-19.7436,lon:-43.8768},
+ {id:'frimisa',nome:'Frimisa',cidade:'Santa Luzia',lat:-19.7527,lon:-43.8806},
+ {id:'duquesa',nome:'Duquesa',cidade:'Santa Luzia',lat:-19.7900,lon:-43.8965},
+ {id:'francisco-pereira',nome:'Francisco Pereira',cidade:'Lagoa Santa',lat:-19.6497,lon:-43.8789},
+ {id:'promissao',nome:'Promissão',cidade:'Lagoa Santa',lat:-19.6265,lon:-43.9025},
+ {id:'aeronautas',nome:'Aeronautas',cidade:'Lagoa Santa',lat:-19.6608,lon:-43.8851}
+];
+const MODELS=[
+ {id:'ecmwf_ifs025',nome:'ECMWF IFS'},
+ {id:'ecmwf_aifs025_single',nome:'ECMWF AIFS (IA)'},
+ {id:'gfs_seamless',nome:'NOAA GFS'},
+ {id:'icon_seamless',nome:'DWD ICON'},
+ {id:'gem_seamless',nome:'Canadá GEM'},
+ {id:'ukmo_seamless',nome:'UK Met Office'},
+ {id:'meteofrance_seamless',nome:'Météo-France'},
+ {id:'jma_seamless',nome:'JMA (Japão)'}
+];
+const ENS=[
+ {id:'ecmwf_ifs025',nome:'ECMWF ENS'},
+ {id:'gfs025',nome:'GFS ENS'},
+ {id:'icon_global',nome:'ICON EPS'},
+ {id:'gem_global',nome:'GEM ENS'}
+];
+const COLORS=['#d9480f','#e8590c','#1971c2','#2f9e44','#9c36b5','#c2255c','#0c8599','#5c940d'];
+const TZ='America%2FSao_Paulo';
+let PTS=loadPts(), D=null, sel=0, chart=null, map=null, markers=[], radarLayer=null;
+
+function loadPts(){try{const s=JSON.parse(localStorage.getItem('pts_v1')||'null');if(s&&s.length===DEFAULT_PTS.length)return s;}catch(e){}return JSON.parse(JSON.stringify(DEFAULT_PTS));}
+function savePts(){try{localStorage.setItem('pts_v1',JSON.stringify(PTS));}catch(e){}}
+const $=id=>document.getElementById(id);
+const thr=()=>parseFloat($('thr').value);
+const fmt=(v,d=1)=>v==null||isNaN(v)?'–':v.toFixed(d).replace('.',',');
+function median(a){if(!a.length)return null;const s=[...a].sort((x,y)=>x-y),m=s.length>>1;return s.length%2?s[m]:(s[m-1]+s[m])/2;}
+function nowKey(){const d=new Date(Date.now()-3*3600e3);return d.toISOString().slice(0,13)+':00';} // Brasília UTC-3 (sem horário de verão)
+
+async function getJSON(u){const r=await fetch(u);if(!r.ok)throw new Error(r.status+' '+(await r.text()).slice(0,120));return r.json();}
+const arr=j=>Array.isArray(j)?j:[j];
+function coords(){return 'latitude='+PTS.map(p=>p.lat).join(',')+'&longitude='+PTS.map(p=>p.lon).join(',');}
+
+async function loadAll(){
+  $('upd').textContent='Carregando modelos…';
+  const c=coords(), st={};
+  const base=getJSON(`https://api.open-meteo.com/v1/forecast?${c}&hourly=precipitation,precipitation_probability,temperature_2m,wind_gusts_10m,cloud_cover&forecast_days=7&timezone=${TZ}`);
+  const det=MODELS.map(m=>getJSON(`https://api.open-meteo.com/v1/forecast?${c}&hourly=precipitation&models=${m.id}&forecast_days=7&timezone=${TZ}`));
+  const ens=ENS.map(m=>getJSON(`https://ensemble-api.open-meteo.com/v1/ensemble?${c}&hourly=precipitation&models=${m.id}&forecast_days=7&timezone=${TZ}`));
+  const [bR,...rest]=await Promise.allSettled([base,...det,...ens]);
+  if(bR.status!=='fulfilled'){$('upd').textContent='Falha ao carregar Open-Meteo: '+bR.reason;return;}
+  const b=arr(bR.value), times=b[0].hourly.time, tIdx={};times.forEach((t,i)=>tIdx[t]=i);
+  const align=(h,key)=>{const out=new Array(times.length).fill(null);h.time.forEach((t,i)=>{if(t in tIdx)out[tIdx[t]]=h[key][i];});return out;};
+  const det_=[],ens_=[];
+  MODELS.forEach((m,k)=>{const r=rest[k];
+    if(r.status==='fulfilled'){const a=arr(r.value);const key=Object.keys(a[0].hourly).find(x=>x.startsWith('precipitation'));
+      det_.push({...m,series:a.map(x=>align(x.hourly,key))});st[m.nome]='ok';}else st[m.nome]='err';});
+  ENS.forEach((m,k)=>{const r=rest[MODELS.length+k];
+    if(r.status==='fulfilled'){const a=arr(r.value);const keys=Object.keys(a[0].hourly).filter(x=>x.startsWith('precipitation'));
+      ens_.push({...m,members:a.map(x=>keys.map(kk=>align(x.hourly,kk)))});st[m.nome]='ok ('+keys.length+')';}else st[m.nome]='err';});
+  D={times,base:b.map(x=>({prec:x.hourly.precipitation,prob:x.hourly.precipitation_probability,temp:x.hourly.temperature_2m,gust:x.hourly.wind_gusts_10m,cloud:x.hourly.cloud_cover||[]})),det:det_,ens:ens_,st,at:new Date()};
+  render();
+}
+
+function hourStats(p,i,t){
+  const v=D.det.map(m=>m.series[p][i]).filter(x=>x!=null);
+  let w=0,n=0;D.ens.forEach(e=>e.members[p].forEach(s=>{const x=s[i];if(x!=null){n++;if(x>=t)w++;}}));
+  return {med:median(v),min:v.length?Math.min(...v):null,max:v.length?Math.max(...v):null,wet:v.filter(x=>x>=t).length,nm:v.length,prob:n?100*w/n:(D.base[p].prob[i]??null)};
+}
+function window24(){const k=nowKey();let s=D.times.findIndex(t=>t>=k);if(s<0)s=0;return [...Array(24).keys()].map(j=>s+j).filter(i=>i<D.times.length);}
+function pcol(p){if(p==null)return '#eee';const st=[[0,'#f4f7fb'],[10,'#dbe8f7'],[30,'#a9c8ef'],[50,'#5f9ae0'],[70,'#2763c4'],[90,'#0b3a86']];let c=st[0][1];for(const[s,col]of st)if(p>=s)c=col;return c;}
+const tcol=p=>p!=null&&p>=50?'#fff':'#1d2430';
+
+function render(){
+  const t=thr(),W=window24();
+  $('upd').textContent=`Atualizado ${D.at.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})} · ${D.det.length}/${MODELS.length} modelos · ${D.ens.length}/${ENS.length} ensembles · atualiza a cada 15 min`;
+  $('leg').innerHTML=[0,10,30,50,70,90].map(v=>`<span style="background:${pcol(v)}"></span>${v}%`).join(' ');
+  // cards
+  $('cards').innerHTML=PTS.map((p,k)=>{
+    const S=W.map(i=>hourStats(k,i,t));const p3=Math.max(...S.slice(0,3).map(s=>s.prob??0));
+    const tot=median(D.det.map(m=>W.reduce((a,i)=>a+(m.series[k][i]??0),0)));
+    const first=S.findIndex(s=>(s.prob??0)>=50);
+    return `<div class="bc ${k===sel?'sel':''}" data-k="${k}"><div class="n">${p.nome}</div><div class="sub">${p.cidade}</div>
+      <div class="big" style="color:${p3>=50?'#1f5fbf':'inherit'}">${fmt(p3,0)}%</div><div class="sub">chance nas próximas 3h</div>
+      <div style="margin-top:6px">24h: <b>${fmt(tot)} mm</b></div>
+      <div class="sub">${first>=0?'Chuva provável a partir de '+D.times[W[first]].slice(11,13)+'h':'Sem hora com ≥50% de chance'}</div></div>`;}).join('');
+  document.querySelectorAll('.bc').forEach(e=>e.onclick=()=>{sel=+e.dataset.k;render();});
+  // heatmap
+  let h='<tr><th class="l">Bairro</th>'+W.map(i=>`<th>${D.times[i].slice(11,13)}h</th>`).join('')+'</tr>';
+  PTS.forEach((p,k)=>{h+=`<tr class="${k===sel?'sel':''}" data-k="${k}"><td class="l">${p.nome}<div class="sub">${p.cidade}</div></td>`+
+    W.map(i=>{const s=hourStats(k,i,t);return `<td class="c" title="${fmt(s.prob,0)}% · mediana ${fmt(s.med)} mm (${fmt(s.min)}–${fmt(s.max)}) · ${s.wet}/${s.nm} modelos ≥ limiar" style="background:${pcol(s.prob)};color:${tcol(s.prob)}">${s.med!=null&&s.med>=0.1?fmt(s.med):''}</td>`;}).join('')+'</tr>';});
+  $('heat').innerHTML=h;
+  document.querySelectorAll('#heat tr[data-k]').forEach(e=>e.onclick=()=>{sel=+e.dataset.k;render();});
+  renderBulletin();renderDetail(W,t);renderDaily();renderModels(W);renderMap(W,t);
+  $('st').innerHTML=Object.entries(D.st).map(([n,s])=>`<span class="chip ${s.startsWith('ok')?'ok':'err'}">${n}: ${s.startsWith('ok')?s:'indisponível'}</span>`).join('');
+}
+
+/* ---------- Boletim em linguagem simples ---------- */
+const WD=['domingo','segunda','terça','quarta','quinta','sexta','sábado'];
+const cap=s=>s.charAt(0).toUpperCase()+s.slice(1);
+const hrOf=i=>+D.times[i].slice(11,13);
+const dowOf=d=>WD[new Date(d+'T12:00:00').getDay()];
+const hh=i=>i>=D.times.length?'':(hrOf(i)+'h');
+const BT=0.5; // mm/h para contar como chuva no boletim
+function st(s){const p=s.prob??0;return p>=60?2:p>=35?1:0;}
+
+function bulletinToday(p){
+  const s0=window24()[0],today=D.times[s0].slice(0,10);
+  const days=[...new Set(D.times.map(x=>x.slice(0,10)))],next=days[days.indexOf(today)+1];
+  let end=D.times.indexOf(next+'T06:00');if(end<0)end=Math.min(D.times.length-1,s0+24);
+  const H=[];for(let i=s0;i<=end;i++)H.push({i,...hourStats(p,i,BT)});
+  // agrupa horas com chuva (tolerando 1h seca no meio)
+  const runs=[];let cur=null,gap=0;
+  H.forEach(h=>{const w=st(h)>0;
+    if(w){if(cur&&gap<=1){cur.b=h.i;cur.hs.push(h);}else{cur={a:h.i,b:h.i,hs:[h]};runs.push(cur);}gap=0;}
+    else if(cur){gap++;if(gap>1)cur=null;}});
+  const B=D.base[p],cloudAvg=(a,b)=>{const v=[];for(let i=a;i<=b;i++)if(B.cloud[i]!=null)v.push(B.cloud[i]);return v.length?v.reduce((x,y)=>x+y,0)/v.length:null;};
+  const ceu=(a,b)=>{const c=cloudAvg(a,b);if(c==null)return '';const night=hrOf(a)>=18||hrOf(a)<6;return c>70?', mas nublado':c>40?(night?', com algumas nuvens':', com sol entre nuvens'):(night?', céu aberto':', com sol');};
+  const L=[];
+  if(!runs.length){L.push(`Expectativa de tempo seco até amanhã cedo${ceu(s0,end)}`);}
+  else{
+    if(runs[0].a>s0)L.push(`Tempo seco até as ${hh(runs[0].a)}${ceu(s0,runs[0].a-1)}`);
+    runs.forEach((r,k)=>{
+      const mx=Math.max(...r.hs.map(h=>st(h))),pMax=Math.max(...r.hs.map(h=>h.prob??0));
+      const medMax=Math.max(...r.hs.map(h=>h.med??0)),soma=r.hs.reduce((a,h)=>a+(h.med??0),0);
+      const forte=medMax>=5||soma>=15,fraca=medMax<1&&soma<3,len=r.b-r.a+1;
+      const nome=(mx===2?'chuva':'possibilidade de chuva')+(forte?' forte':fraca?' fraca':'');
+      const ateFim=r.b>=end-1,inicioNoite=hrOf(r.a)>=17||hrOf(r.a)<2;
+      const fim=ateFim?(inicioNoite?', durando a noite inteira':` até a madrugada de ${dowOf(next)}`):(D.times[r.b+1]&&D.times[r.b+1].startsWith(next)?` até por volta das ${hh(r.b+1)} da madrugada de ${dowOf(next)}`:` até as ${hh(r.b+1)}`);
+      let txt;
+      if(r.a===s0){const caindo=r.hs.length>2&&(r.hs[r.hs.length-1].prob??0)<(r.hs[0].prob??0)-15;
+        txt=`${cap(nome)} agora${fim}${caindo&&!ateFim?', diminuindo nas próximas horas':''}`;}
+      else{const pre=k?'depois, ':'';
+        txt=(len<=2&&!ateFim)?`${pre}${mx===2?'uma chuva rápida':'possibilidade de uma chuva rápida'}${forte?' e forte':''} por volta das ${hh(r.a)}`:`${pre}${nome} a partir das ${hh(r.a)}${fim}`;}
+      L.push(`${cap(txt)} (chance de ${fmt(pMax,0)}%)`);
+      const nx=runs[k+1];if(nx&&nx.a-r.b>3)L.push(`Intervalo seco das ${hh(r.b+1)} às ${hh(nx.a)}`);
+    });
+  }
+  const tv=[];for(let i=s0;i<=end;i++)if(B.temp[i]!=null&&D.times[i].startsWith(today))tv.push(B.temp[i]);
+  if(hrOf(s0)<16&&tv.length)L.push(`Temperatura máxima de ${fmt(Math.max(...tv),0)}ºC`);
+  else{const mn=[];for(let i=s0;i<=end;i++)if(B.temp[i]!=null)mn.push(B.temp[i]);if(mn.length)L.push(`Mínima de ${fmt(Math.min(...mn),0)}ºC durante a madrugada`);}
+  return L;
+}
+
+function bulletinWeek(p){
+  const days=[...new Set(D.times.map(x=>x.slice(0,10)))],today=D.times[window24()[0]].slice(0,10);
+  const fut=days.filter(d=>d>today).slice(0,6);
+  const PER=[['madrugada',0,5,'de madrugada'],['manhã',6,11,'de manhã'],['tarde',12,17,'à tarde'],['noite',18,23,'à noite']];
+  let nChuva=0;
+  const L=fut.map(d=>{
+    const idx=D.times.map((x,i)=>x.startsWith(d)?i:-1).filter(i=>i>=0);
+    const S=idx.map(i=>({h:hrOf(i),...hourStats(p,i,BT)}));
+    if(S.length<20)return null;
+    const wet=PER.map(([n,a,b])=>Math.max(...S.filter(s=>s.h>=a&&s.h<=b).map(s=>s.prob??0))>=50);
+    const soma=S.reduce((a,s)=>a+(s.med??0),0);
+    const conf=S.reduce((a,s)=>a+Math.abs(2*(s.prob??50)-100),0)/S.length;
+    const cl=conf>=60?'alta':conf>=30?'média':'baixa';
+    let txt;
+    if(!wet.some(x=>x))txt='seco';
+    else{nChuva++;
+      const forte=soma>=15?' forte':'';
+      if(wet[1]&&wet[2]&&wet[3])txt=`chuva${forte} o dia todo`;
+      else if(wet.filter(x=>x).length===1&&wet[3])txt=`chuva${forte} só no fim do dia`;
+      else if(wet[2]&&wet[3]&&!wet[1])txt=`chuva${forte} da tarde até a noite`;
+      else{const ps=PER.filter((_,k)=>wet[k]).map(x=>x[3]);txt=`chuva${forte} `+(ps.length>1?ps.slice(0,-1).join(', ')+' e '+ps.slice(-1):ps[0]);}
+    }
+    return `${cap(dowOf(d))} (${d.slice(8,10)}/${d.slice(5,7)}): ${txt} — confiança ${cl}`;
+  }).filter(Boolean);
+  const head=nChuva===0?'Semana sem previsão de chuva relevante.':`Chuva prevista em ${nChuva} dos próximos ${L.length} dias:`;
+  return [head,...L];
+}
+
+function renderBulletin(){
+  const p=PTS[sel],h=hrOf(window24()[0]);
+  const [sau,tipo]=h<12?['Bom dia! Mukuyu!','da manhã']:h<18?['Boa tarde! Mukuyu!','da tarde']:['Boa noite! Mukuyu!','da noite'];
+  const T=bulletinToday(sel),W7=bulletinWeek(sel);
+  const txt=`${sau}\n\nBoletim meteorológico ${tipo} — ${p.nome} (${p.cidade}):\n${T.map(x=>'- '+x).join('\n')}\n\nPróximos dias:\n${W7[0]}\n${W7.slice(1).map(x=>'- '+x).join('\n')}\n\nFim do boletim`;
+  $('bolT').textContent=`Boletim — ${p.nome}`;
+  $('bol').textContent=txt;
+}
+function copyBulletin(){
+  const t=$('bol').textContent,ok=()=>{$('btnCopy').textContent='Copiado ✓';setTimeout(()=>$('btnCopy').textContent='Copiar para WhatsApp',1500);};
+  const fb=()=>{const a=document.createElement('textarea');a.value=t;document.body.appendChild(a);a.select();try{document.execCommand('copy');ok();}catch(e){}a.remove();};
+  try{navigator.clipboard.writeText(t).then(ok,fb);}catch(e){fb();}
+}
+
+function renderDetail(W,t){
+  const p=PTS[sel];$('detT').textContent=`Detalhe 24h — ${p.nome} (${p.cidade})`;
+  const S=W.map(i=>hourStats(sel,i,t)),labels=W.map(i=>D.times[i].slice(11,13)+'h');
+  const ds=[{type:'bar',label:'Mediana (mm/h)',data:S.map(s=>s.med),backgroundColor:'#5f9ae0aa',yAxisID:'y',order:3},
+    {type:'line',label:'Prob. ensembles (%)',data:S.map(s=>s.prob),borderColor:'#0b3a86',borderDash:[5,4],pointRadius:0,yAxisID:'y1',tension:.3,order:1}];
+  D.det.forEach((m,j)=>ds.push({type:'line',label:m.nome,data:W.map(i=>m.series[sel][i]),borderColor:COLORS[j%8]+'99',borderWidth:1,pointRadius:0,yAxisID:'y',tension:.2,order:2}));
+  if(chart)chart.destroy();
+  chart=new Chart($('chart'),{data:{labels,datasets:ds},options:{responsive:true,interaction:{mode:'index',intersect:false},
+    plugins:{legend:{labels:{boxWidth:10,font:{size:10}}}},
+    scales:{y:{beginAtZero:true,title:{display:true,text:'mm/h'}},y1:{position:'right',min:0,max:100,grid:{drawOnChartArea:false},title:{display:true,text:'%'}}}}});
+}
+
+function renderDaily(){
+  const p=PTS[sel];$('d7T').textContent=`Próximos 7 dias — ${p.nome} (${p.cidade})`;
+  const days=[...new Set(D.times.map(x=>x.slice(0,10)))].slice(0,7);
+  const wd=['dom','seg','ter','qua','qui','sex','sáb'];
+  let h='<tr><th class="l">Dia</th><th>Chuva (mediana)</th><th>Faixa modelos</th><th>Prob. ≥1 mm</th><th>Máx/Mín °C</th><th>Rajada máx</th></tr>';
+  days.forEach(d=>{
+    const idx=D.times.map((x,i)=>x.startsWith(d)?i:-1).filter(i=>i>=0);
+    const sums=D.det.map(m=>{const v=idx.map(i=>m.series[sel][i]).filter(x=>x!=null);return v.length>=20?v.reduce((a,b)=>a+b,0):null;}).filter(x=>x!=null);
+    let w=0,n=0;D.ens.forEach(e=>e.members[sel].forEach(s=>{const v=idx.map(i=>s[i]).filter(x=>x!=null);if(v.length>=20){n++;if(v.reduce((a,b)=>a+b,0)>=1)w++;}}));
+    const pr=n?100*w/n:null,B=D.base[sel],tv=idx.map(i=>B.temp[i]).filter(x=>x!=null),gv=idx.map(i=>B.gust[i]).filter(x=>x!=null);
+    const dt=new Date(d+'T12:00:00');
+    h+=`<tr><td class="l">${wd[dt.getDay()]} ${d.slice(8,10)}/${d.slice(5,7)}</td><td><b>${fmt(median(sums))} mm</b></td><td>${sums.length?fmt(Math.min(...sums))+'–'+fmt(Math.max(...sums)):'–'}</td>
+      <td style="background:${pcol(pr)};color:${tcol(pr)}">${fmt(pr,0)}%</td><td>${tv.length?fmt(Math.max(...tv),0)+' / '+fmt(Math.min(...tv),0):'–'}</td><td>${gv.length?fmt(Math.max(...gv),0)+' km/h':'–'}</td></tr>`;});
+  $('d7').innerHTML=h;
+}
+
+function renderModels(W){
+  let h='<tr><th class="l">Modelo</th>'+PTS.map(p=>`<th>${p.nome.split(' (')[0]}</th>`).join('')+'</tr>';
+  D.det.forEach(m=>{h+=`<tr><td class="l">${m.nome}</td>`+PTS.map((p,k)=>`<td>${fmt(W.reduce((a,i)=>a+(m.series[k][i]??0),0))}</td>`).join('')+'</tr>';});
+  $('mt').innerHTML=h;
+}
+
+function renderMap(W,t){
+  if(!map){
+    map=L.map('map').setView([-19.70,-43.885],12);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{attribution:'© OpenStreetMap © CARTO',maxZoom:18}).addTo(map);
+    loadRadar();
+  }
+  markers.forEach(m=>map.removeLayer(m));markers=[];
+  PTS.forEach((p,k)=>{
+    const S=W.slice(0,3).map(i=>hourStats(k,i,t)),p3=Math.max(...S.map(s=>s.prob??0));
+    const mk=L.marker([p.lat,p.lon],{draggable:true,icon:L.divIcon({className:'',html:`<div class="mk" style="background:${pcol(p3)};color:${tcol(p3)}">${p.nome.split(' (')[0]} ${fmt(p3,0)}%</div>`,iconAnchor:[30,10]})}).addTo(map);
+    mk.on('click',()=>{sel=k;render();});
+    mk.on('dragend',e=>{const ll=e.target.getLatLng();PTS[k].lat=+ll.lat.toFixed(4);PTS[k].lon=+ll.lng.toFixed(4);savePts();loadAll();});
+    markers.push(mk);
+  });
+}
+
+async function loadRadar(){
+  try{
+    const j=await getJSON('https://api.rainviewer.com/public/weather-maps.json');
+    const fr=(j.radar.past||[]).slice(-1)[0];if(!fr)throw new Error('sem frames');
+    if(radarLayer)map.removeLayer(radarLayer);
+    radarLayer=L.tileLayer(`${j.host}${fr.path}/256/{z}/{x}/{y}/2/1_1.png`,{opacity:.6,maxNativeZoom:7,maxZoom:18,attribution:'Radar © RainViewer'}).addTo(map);
+    const tm=new Date(fr.time*1000).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+    $('radarSt').textContent=`Radar RainViewer de ${tm} (resolução grossa no plano gratuito). Arraste um marcador para ajustar a posição do bairro.`;
+  }catch(e){$('radarSt').innerHTML='Radar indisponível agora. Use o <a href="https://www.windy.com/-19.70/-43.88?radar,-19.70,-43.88,11" target="_blank">radar do Windy</a>. Arraste um marcador para ajustar a posição do bairro.';}
+}
+
+$('btnCopy').onclick=copyBulletin;
+$('btnR').onclick=()=>{loadAll();if(map)loadRadar();};
+$('thr').onchange=()=>D&&render();
+$('btnReset').onclick=()=>{PTS=JSON.parse(JSON.stringify(DEFAULT_PTS));savePts();loadAll();};
+setInterval(()=>{loadAll();if(map)loadRadar();},15*60e3);
+loadAll();
+</script>
+</body>
+</html>
