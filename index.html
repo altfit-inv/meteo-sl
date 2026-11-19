@@ -87,7 +87,7 @@ canvas{max-height:300px}
     <section class="card">
       <h2 id="detT">Detalhe</h2>
       <canvas id="chart"></canvas>
-      <div class="note">Barras: mediana dos modelos (mm/h). Linhas finas: cada modelo. Linha tracejada: probabilidade dos ensembles (eixo direito).</div>
+      <div class="note">Barras: mediana dos modelos (mm/h). Linha tracejada: probabilidade de chuva dos ensembles (eixo direito).</div>
     </section>
     <section class="card">
       <h2>Mapa + radar</h2>
@@ -305,7 +305,6 @@ function renderDetail(W,t){
   const S=W.map(i=>hourStats(sel,i,t)),labels=W.map(i=>D.times[i].slice(11,13)+'h');
   const ds=[{type:'bar',label:'Mediana (mm/h)',data:S.map(s=>s.med),backgroundColor:'#5f9ae0aa',yAxisID:'y',order:3},
     {type:'line',label:'Prob. ensembles (%)',data:S.map(s=>s.prob),borderColor:'#0b3a86',borderDash:[5,4],pointRadius:0,yAxisID:'y1',tension:.3,order:1}];
-  D.det.forEach((m,j)=>ds.push({type:'line',label:m.nome,data:W.map(i=>m.series[sel][i]),borderColor:COLORS[j%8]+'99',borderWidth:1,pointRadius:0,yAxisID:'y',tension:.2,order:2}));
   if(chart)chart.destroy();
   chart=new Chart($('chart'),{data:{labels,datasets:ds},options:{responsive:true,interaction:{mode:'index',intersect:false},
     plugins:{legend:{labels:{boxWidth:10,font:{size:10}}}},
