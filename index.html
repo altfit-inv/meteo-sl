@@ -66,7 +66,7 @@ canvas{max-height:300px}
       <button id="btnCopy">Copiar para WhatsApp</button>
     </div>
     <div id="bol" style="white-space:pre-wrap;font-size:15px;line-height:1.55"></div>
-    <div class="note" id="bolN" style="margin-top:8px">Texto gerado automaticamente a partir dos ensembles (chance ≥ 60% = "chuva"; 35–60% = "possibilidade de chuva"). Toque em outro bairro para trocar o boletim.</div>
+    <div class="note" id="bolN" style="margin-top:8px">Texto gerado automaticamente (chance ≥ 60% = "chuva"; 35–60% = "possibilidade de chuva"). Toque em outro bairro para trocar o boletim.</div>
   </section>
 
   <section class="card">
@@ -80,14 +80,14 @@ canvas{max-height:300px}
       <div class="legend" id="leg"></div>
     </div>
     <div class="scroll"><table class="heat" id="heat"></table></div>
-    <div class="note">Cor = % de membros dos ensembles (ECMWF, GFS, ICON, GEM) com chuva ≥ limiar naquela hora. Número = mediana dos modelos determinísticos em mm. Toque num bairro para ver o detalhe.</div>
+    <div class="note">Cor = chance de chover naquela hora. Número = chuva prevista em mm (mediana dos modelos). Toque num bairro para ver o detalhe.</div>
   </section>
 
   <div class="grid2">
     <section class="card">
       <h2 id="detT">Detalhe</h2>
       <canvas id="chart"></canvas>
-      <div class="note">Barras: mediana dos modelos (mm/h). Linha tracejada: probabilidade de chuva dos ensembles (eixo direito).</div>
+      <div class="note">Barras: mediana dos modelos (mm/h). Linha tracejada: chance de chuva (eixo direito).</div>
     </section>
     <section class="card">
       <h2>Mapa + radar</h2>
@@ -99,7 +99,7 @@ canvas{max-height:300px}
   <section class="card">
     <h2 id="d7T">Próximos 7 dias</h2>
     <div class="scroll"><table id="d7"></table></div>
-    <div class="note">Chuva/dia = mediana da soma diária dos modelos (faixa mín–máx entre modelos). Prob. = % de membros dos ensembles com ≥ 1 mm no dia.</div>
+    <div class="note">Chuva/dia = mediana da soma diária dos modelos (faixa mín–máx entre modelos). Prob. = chance de chover pelo menos 1 mm no dia.</div>
   </section>
 
   <details class="card">
