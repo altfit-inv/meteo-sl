@@ -76,7 +76,7 @@ canvas{max-height:300px}
 
   <section class="card">
     <div class="row" style="justify-content:space-between">
-      <h2>Próximas 24h — probabilidade de chuva (ensembles) por hora</h2>
+      <h2>Próximas 24h — probabilidade de chuva por hora</h2>
       <div class="legend" id="leg"></div>
     </div>
     <div class="scroll"><table class="heat" id="heat"></table></div>
@@ -304,7 +304,7 @@ function renderDetail(W,t){
   const p=PTS[sel];$('detT').textContent=`Detalhe 24h — ${p.nome} (${p.cidade})`;
   const S=W.map(i=>hourStats(sel,i,t)),labels=W.map(i=>D.times[i].slice(11,13)+'h');
   const ds=[{type:'bar',label:'Mediana (mm/h)',data:S.map(s=>s.med),backgroundColor:'#5f9ae0aa',yAxisID:'y',order:3},
-    {type:'line',label:'Prob. ensembles (%)',data:S.map(s=>s.prob),borderColor:'#0b3a86',borderDash:[5,4],pointRadius:0,yAxisID:'y1',tension:.3,order:1}];
+    {type:'line',label:'Probabilidade de chuva (%)',data:S.map(s=>s.prob),borderColor:'#0b3a86',borderDash:[5,4],pointRadius:0,yAxisID:'y1',tension:.3,order:1}];
   if(chart)chart.destroy();
   chart=new Chart($('chart'),{data:{labels,datasets:ds},options:{responsive:true,interaction:{mode:'index',intersect:false},
     plugins:{legend:{labels:{boxWidth:10,font:{size:10}}}},
